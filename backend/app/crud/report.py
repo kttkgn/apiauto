@@ -1,20 +1,21 @@
 from typing import List, Optional
 from datetime import datetime, timedelta
-from sqlalchemy import func, and_
-from sqlalchemy.orm import Session
+from sqlalchemy import func, and_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.report import Report
 from app.schemas.report import ReportCreate
 
 
 class CRUDReport:
-    def get(self, db: Session, id: int) -> Optional[Report]:
+    async def get(self, db: AsyncSession, id: int) -> Optional[Report]:
         """获取报告"""
-        return db.query(Report).filter(Report.id == id).first()
+        result = await db.execute(select(Report).filter(Report.id == id))
+        return result.scalar_one_or_none()
 
-    def get_list(
+    async def get_list(
         self,
-        db: Session,
+        db: AsyncSession,
         *,
         skip: int = 0,
         limit: int = 100,
@@ -22,14 +23,15 @@ class CRUDReport:
         end_time: Optional[datetime] = None
     ) -> List[Report]:
         """获取报告列表"""
-        query = db.query(Report)
+        query = select(Report)
         if start_time:
             query = query.filter(Report.created_at >= start_time)
         if end_time:
             query = query.filter(Report.created_at <= end_time)
-        return query.offset(skip).limit(limit).all()
+        result = await db.execute(query.offset(skip).limit(limit))
+        return result.scalars().all()
 
-    def create(self, db: Session, *, obj_in: ReportCreate) -> Report:
+    async def create(self, db: AsyncSession, *, obj_in: ReportCreate) -> Report:
         """创建报告"""
         db_obj = Report(
             name=obj_in.name,
@@ -37,38 +39,43 @@ class CRUDReport:
             content=obj_in.content
         )
         db.add(db_obj)
-        db.commit()
-        db.refresh(db_obj)
+        await db.commit()
+        await db.refresh(db_obj)
         return db_obj
 
-    def remove(self, db: Session, *, id: int) -> Report:
+    async def remove(self, db: AsyncSession, *, id: int) -> Report:
         """删除报告"""
-        obj = db.query(Report).get(id)
-        db.delete(obj)
-        db.commit()
+        obj = await db.get(Report, id)
+        await db.delete(obj)
+        await db.commit()
         return obj
 
-    def get_statistics(
+    async def get_statistics(
         self,
-        db: Session,
+        db: AsyncSession,
         *,
         start_time: Optional[datetime] = None,
         end_time: Optional[datetime] = None
     ) -> dict:
         """获取报告统计信息"""
-        query = db.query(Report)
+        query = select(Report)
         if start_time:
             query = query.filter(Report.created_at >= start_time)
         if end_time:
             query = query.filter(Report.created_at <= end_time)
 
         # 获取总报告数
-        total = query.count()
+        result = await db.execute(select(func.count()).select_from(query.subquery()))
+        total = result.scalar()
+
+        # 获取所有报告
+        result = await db.execute(query)
+        reports = result.scalars().all()
 
         # 计算成功率
         success_count = 0
         total_duration = 0
-        for report in query.all():
+        for report in reports:
             content = report.content
             if content.get("summary", {}).get("passed", 0) == content.get("summary", {}).get("total", 0):
                 success_count += 1
@@ -83,12 +90,14 @@ class CRUDReport:
             current = start_time
             while current <= end_time:
                 next_day = current + timedelta(days=1)
-                day_reports = query.filter(
+                day_query = select(Report).filter(
                     and_(
                         Report.created_at >= current,
                         Report.created_at < next_day
                     )
-                ).all()
+                )
+                result = await db.execute(day_query)
+                day_reports = result.scalars().all()
 
                 day_total = len(day_reports)
                 day_passed = sum(

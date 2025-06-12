@@ -34,7 +34,7 @@ class CRUDExecution(CRUDBase[Execution, ExecutionCreate, ExecutionUpdate]):
         """
         创建执行日志
         """
-        obj_in_data = obj_in.dict()
+        obj_in_data = obj_in.model_dump()
         db_obj = ExecutionLog(**obj_in_data, execution_id=execution_id)
         db.add(db_obj)
         await db.commit()
@@ -61,7 +61,7 @@ class CRUDExecution(CRUDBase[Execution, ExecutionCreate, ExecutionUpdate]):
         """
         创建执行详情
         """
-        obj_in_data = obj_in.dict()
+        obj_in_data = obj_in.model_dump()
         db_obj = ExecutionDetail(**obj_in_data, execution_id=execution_id)
         db.add(db_obj)
         await db.commit()
@@ -78,13 +78,22 @@ class CRUDExecution(CRUDBase[Execution, ExecutionCreate, ExecutionUpdate]):
         """
         更新执行详情
         """
-        update_data = obj_in.dict(exclude_unset=True)
+        update_data = obj_in.model_dump(exclude_unset=True)
         for field, value in update_data.items():
             setattr(db_obj, field, value)
         db.add(db_obj)
         await db.commit()
         await db.refresh(db_obj)
         return db_obj
+
+    async def remove_detail(self, db: AsyncSession, *, id: int) -> ExecutionDetail:
+        """
+        删除执行详情
+        """
+        obj = await db.get(ExecutionDetail, id)
+        await db.delete(obj)
+        await db.commit()
+        return obj
 
 
 execution = CRUDExecution(Execution) 

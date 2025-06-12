@@ -10,10 +10,9 @@ from app.schemas.module import (
     ModuleVariable,
     ModuleVariableCreate,
     ModuleVariableUpdate,
-    TestCase,
-    TestCaseCreate,
-    TestCaseUpdate,
+
 )
+from app.schemas.test_case import TestCase, TestCaseUpdate, TestCaseCreate
 from app.services.module import ModuleService
 
 router = APIRouter()

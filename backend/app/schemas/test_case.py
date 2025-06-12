@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional
-from pydantic import BaseModel, Field
+from datetime import datetime
+from pydantic import BaseModel, Field, ConfigDict
 
 
 class TestCaseBase(BaseModel):
@@ -28,8 +29,12 @@ class TestCase(TestCaseBase):
     """测试用例响应模型"""
     id: int
     module_id: int
-    created_at: str
-    updated_at: str
+    created_at: datetime
+    updated_at: datetime
 
-    class Config:
-        from_attributes = True 
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
+            datetime: lambda v: v.isoformat() if v else None
+        }
+    ) 

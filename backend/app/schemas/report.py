@@ -1,12 +1,24 @@
 from typing import Dict, List, Optional
-from pydantic import BaseModel, Field
+from datetime import datetime
+from pydantic import BaseModel, Field, ConfigDict, validator
 
 
 class ReportBase(BaseModel):
     """报告基础模型"""
     name: str = Field(..., description="报告名称")
-    execution_id: int = Field(..., description="执行记录ID")
-    content: Dict = Field(..., description="报告内容")
+    execution_id: int = Field(..., description="执行ID")
+    content: Optional[Dict] = Field(None, description="报告内容")
+    total_cases: int = Field(0, description="总用例数")
+    passed_cases: int = Field(0, description="通过用例数")
+    failed_cases: int = Field(0, description="失败用例数")
+    duration: Optional[int] = Field(None, description="执行时长(秒)")
+
+    @validator('execution_id')
+    def validate_execution_id(cls, v):
+        """验证执行ID字段"""
+        if v <= 0:
+            raise ValueError('执行ID必须为正整数')
+        return v
 
 
 class ReportCreate(ReportBase):
@@ -14,13 +26,31 @@ class ReportCreate(ReportBase):
     pass
 
 
+class ReportUpdate(ReportBase):
+    """更新报告请求模型"""
+    name: Optional[str] = Field(None, description="报告名称")
+    content: Optional[Dict] = Field(None, description="报告内容")
+    execution_id: Optional[int] = Field(None, description="执行ID")
+
+    @validator('execution_id')
+    def validate_execution_id(cls, v):
+        """验证执行ID字段"""
+        if v is not None and v <= 0:
+            raise ValueError('执行ID必须为正整数或None')
+        return v
+
+
 class Report(ReportBase):
     """报告响应模型"""
     id: int
-    created_at: str
+    created_at: datetime
 
-    class Config:
-        from_attributes = True
+    model_config = ConfigDict(
+        from_attributes=True,
+        json_encoders={
+            datetime: lambda v: v.isoformat() if v else None
+        }
+    )
 
 
 class ReportStatistics(BaseModel):

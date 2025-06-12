@@ -1,6 +1,6 @@
 from typing import List, Optional
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.orm import Session
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
 from app.services.execution import ExecutionService
@@ -22,7 +22,7 @@ router = APIRouter()
 async def get_executions(
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """获取执行记录列表"""
     return await ExecutionService(db).get_executions(skip=skip, limit=limit)
@@ -31,7 +31,7 @@ async def get_executions(
 @router.post("/", response_model=Execution)
 async def create_execution(
     execution: ExecutionCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """创建执行记录"""
     return await ExecutionService(db).create_execution(execution)
@@ -40,7 +40,7 @@ async def create_execution(
 @router.get("/{execution_id}", response_model=Execution)
 async def get_execution(
     execution_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """获取执行记录详情"""
     return await ExecutionService(db).get_execution(execution_id)
@@ -50,7 +50,7 @@ async def get_execution(
 async def update_execution(
     execution_id: int,
     execution: ExecutionUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """更新执行记录"""
     return await ExecutionService(db).update_execution(execution_id, execution)
@@ -59,7 +59,7 @@ async def update_execution(
 @router.delete("/{execution_id}")
 async def delete_execution(
     execution_id: int,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """删除执行记录"""
     await ExecutionService(db).delete_execution(execution_id)
@@ -71,7 +71,7 @@ async def get_execution_logs(
     execution_id: int,
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """获取执行日志列表"""
     return await ExecutionService(db).get_logs(execution_id, skip=skip, limit=limit)
@@ -81,7 +81,7 @@ async def get_execution_logs(
 async def create_execution_log(
     execution_id: int,
     log: ExecutionLogCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """创建执行日志"""
     return await ExecutionService(db).create_log(execution_id, log)
@@ -92,7 +92,7 @@ async def get_execution_details(
     execution_id: int,
     skip: int = Query(0, ge=0),
     limit: int = Query(10, ge=1, le=100),
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """获取执行详情列表"""
     return await ExecutionService(db).get_details(execution_id, skip=skip, limit=limit)
@@ -102,7 +102,7 @@ async def get_execution_details(
 async def create_execution_detail(
     execution_id: int,
     detail: ExecutionDetailCreate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """创建执行详情"""
     return await ExecutionService(db).create_detail(execution_id, detail)
@@ -112,7 +112,17 @@ async def create_execution_detail(
 async def update_execution_detail(
     detail_id: int,
     detail: ExecutionDetailUpdate,
-    db: Session = Depends(get_db),
+    db: AsyncSession = Depends(get_db),
 ):
     """更新执行详情"""
-    return await ExecutionService(db).update_detail(detail_id, detail) 
+    return await ExecutionService(db).update_detail(detail_id, detail)
+
+
+@router.delete("/details/{detail_id}")
+async def delete_execution_detail(
+    detail_id: int,
+    db: AsyncSession = Depends(get_db),
+):
+    """删除执行详情"""
+    await ExecutionService(db).remove_detail(detail_id)
+    return {"message": "执行详情已删除"} 

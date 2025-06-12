@@ -8,6 +8,7 @@ from app.models.base import Base
 
 class Environment(Base):
     """环境配置表"""
+    __tablename__ = "environments"
     
     name = Column(String(100), nullable=False, unique=True, comment='环境名称')
     base_url = Column(String(255), nullable=False, comment='基础URL')
@@ -19,12 +20,17 @@ class Environment(Base):
         back_populates='environment',
         cascade='all, delete-orphan'
     )
+    executions: Mapped[list['Execution']] = relationship(
+        'Execution',
+        back_populates='environment'
+    )
 
 
 class EnvironmentVariable(Base):
     """环境变量表"""
+    __tablename__ = "environment_variables"
     
-    environment_id = Column(Integer, ForeignKey('environment.id', ondelete='CASCADE'), nullable=False, comment='环境ID')
+    environment_id = Column(Integer, ForeignKey('environments.id', ondelete='CASCADE'), nullable=False, comment='环境ID')
     name = Column(String(100), nullable=False, comment='变量名')
     value = Column(Text, nullable=False, comment='变量值')
     description = Column(String(255), comment='描述')

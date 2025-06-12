@@ -1,77 +1,122 @@
-from datetime import date
-from sqlalchemy import func, and_
-from sqlalchemy.orm import Session
+from typing import Dict, Any
+from datetime import datetime, timedelta
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.test_case import TestCase
-from app.models.execution import Execution, ExecutionDetail
+from app.models.execution import Execution, ExecutionStatus
+from app.models.report import Report
 
 
 class CRUDDashboard:
-    def get_test_case_stats(self, db: Session):
-        """获取测试用例统计"""
-        # 获取总用例数
-        total_count = db.query(func.count(TestCase.id)).scalar() or 0
+    async def get_test_case_stats(self, db: AsyncSession) -> Dict[str, Any]:
+        """获取测试用例统计信息"""
+        # 获取测试用例总数
+        total_count = await db.scalar(select(func.count(TestCase.id))) or 0
         
-        # 获取今日新增用例数
-        today = date.today()
-        today_new = db.query(func.count(TestCase.id)).filter(
-            func.date(TestCase.created_at) == today
-        ).scalar() or 0
+        # 获取最近7天的执行统计
+        seven_days_ago = datetime.now() - timedelta(days=7)
+        executions = await db.execute(
+            select(Execution)
+            .where(Execution.created_at >= seven_days_ago)
+        )
+        executions = executions.scalars().all()
         
-        return {
-            "total_count": total_count,
-            "today_new": today_new
-        }
-
-    def get_execution_stats(self, db: Session):
-        """获取执行统计"""
-        # 获取总执行次数
-        total_count = db.query(func.count(Execution.id)).scalar() or 0
+        # 统计成功和失败数量
+        success_count = sum(1 for e in executions if e.status == ExecutionStatus.SUCCESS)
+        failed_count = sum(1 for e in executions if e.status == ExecutionStatus.FAILED)
         
-        # 获取今日执行次数
-        today = date.today()
-        today_count = db.query(func.count(Execution.id)).filter(
-            func.date(Execution.created_at) == today
-        ).scalar() or 0
+        # 计算成功率
+        success_rate = (success_count / (success_count + failed_count) * 100) if (success_count + failed_count) > 0 else 0
         
         return {
             "total_count": total_count,
-            "today_count": today_count
+            "success_count": success_count,
+            "failed_count": failed_count,
+            "success_rate": round(success_rate, 2)
         }
 
-    def get_success_rate_stats(self, db: Session):
-        """获取成功率统计"""
-        # 获取总成功率
-        total_executions = db.query(func.count(Execution.id)).scalar() or 0
-        total_success = db.query(func.count(Execution.id)).filter(
-            Execution.status == "success"
-        ).scalar() or 0
-        total_rate = (total_success / total_executions * 100) if total_executions > 0 else 0
+    async def get_execution_trend(self, db: AsyncSession, days: int = 7) -> Dict[str, Any]:
+        """获取执行趋势数据"""
+        start_date = datetime.now() - timedelta(days=days)
         
-        # 获取今日成功率
-        today = date.today()
-        today_executions = db.query(func.count(Execution.id)).filter(
-            func.date(Execution.created_at) == today
-        ).scalar() or 0
-        today_success = db.query(func.count(Execution.id)).filter(
-            and_(
-                func.date(Execution.created_at) == today,
-                Execution.status == "success"
+        # 获取每日执行数量
+        daily_executions = await db.execute(
+            select(
+                func.date(Execution.created_at).label('date'),
+                func.count(Execution.id).label('count')
             )
-        ).scalar() or 0
-        today_rate = (today_success / today_executions * 100) if today_executions > 0 else 0
+            .where(Execution.created_at >= start_date)
+            .group_by(func.date(Execution.created_at))
+            .order_by(func.date(Execution.created_at))
+        )
+        daily_executions = daily_executions.all()
+        
+        # 获取每日成功率
+        daily_success = await db.execute(
+            select(
+                func.date(Execution.created_at).label('date'),
+                func.count(Execution.id).label('count')
+            )
+            .where(
+                Execution.created_at >= start_date,
+                Execution.status == ExecutionStatus.SUCCESS
+            )
+            .group_by(func.date(Execution.created_at))
+            .order_by(func.date(Execution.created_at))
+        )
+        daily_success = daily_success.all()
+        
+        # 格式化数据
+        dates = [(start_date + timedelta(days=i)).strftime('%Y-%m-%d') for i in range(days)]
+        execution_counts = [0] * days
+        success_rates = [0] * days
+        
+        for exec_data in daily_executions:
+            date = exec_data.date.strftime('%Y-%m-%d')
+            if date in dates:
+                idx = dates.index(date)
+                execution_counts[idx] = exec_data.count
+        
+        for success_data in daily_success:
+            date = success_data.date.strftime('%Y-%m-%d')
+            if date in dates:
+                idx = dates.index(date)
+                total = execution_counts[idx]
+                if total > 0:
+                    success_rates[idx] = round((success_data.count / total) * 100, 2)
         
         return {
-            "total_rate": round(total_rate, 2),
-            "today_rate": round(today_rate, 2)
+            "dates": dates,
+            "execution_counts": execution_counts,
+            "success_rates": success_rates
         }
 
-    def get_stats(self, db: Session):
-        """获取所有统计数据"""
+    async def get_report_summary(self, db: AsyncSession) -> Dict[str, Any]:
+        """获取报告摘要信息"""
+        # 获取最近一次报告
+        latest_report = await db.execute(
+            select(Report)
+            .order_by(Report.created_at.desc())
+            .limit(1)
+        )
+        latest_report = latest_report.scalar_one_or_none()
+        
+        if not latest_report:
+            return {
+                "total_cases": 0,
+                "passed_cases": 0,
+                "failed_cases": 0,
+                "duration": 0,
+                "created_at": None
+            }
+        
         return {
-            "test_cases": self.get_test_case_stats(db),
-            "executions": self.get_execution_stats(db),
-            "success_rates": self.get_success_rate_stats(db)
+            "total_cases": latest_report.total_cases,
+            "passed_cases": latest_report.passed_cases,
+            "failed_cases": latest_report.failed_cases,
+            "duration": latest_report.duration,
+            "created_at": latest_report.created_at
         }
 
 

@@ -5,7 +5,10 @@ from app.api.v1 import (
     execution,
     dashboard,
     test_case,
-    report
+    report,
+    trigger,
+    scheduler,
+    webhook
 )
 
 api_router = APIRouter()
@@ -29,6 +32,27 @@ api_router.include_router(
     execution.router,
     prefix="/executions",
     tags=["执行管理"]
+)
+
+# 触发执行
+api_router.include_router(
+    trigger.router,
+    prefix="/trigger",
+    tags=["触发执行"]
+)
+
+# 定时任务
+api_router.include_router(
+    scheduler.router,
+    prefix="/scheduler",
+    tags=["定时任务"]
+)
+
+# Webhook
+api_router.include_router(
+    webhook.router,
+    prefix="/webhook",
+    tags=["Webhook"]
 )
 
 # 仪表盘
